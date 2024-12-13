@@ -1,0 +1,6 @@
+{
+  "java.project.importOnFirstTimeStartup": "automatic",
+  "security.workspace.trust.enabled": false,
+  "security.workspace.trust.startupPrompt": "never",
+  "redhat.telemetry.enabled": true
+}

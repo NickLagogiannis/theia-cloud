@@ -45,9 +45,37 @@ RUN apt-get update && apt-get install -y wget apt-transport-https && \
     apt-get update && apt-get install -y git openssh-client openssh-server bash libsecret-1-0 temurin-17-jdk maven && \
     apt-get purge -y wget && \
     apt-get clean
-ENV HOME /home/theia
+
+# **Key Change 1: Set Home Directory**
+USER root
+# **Key Change 2: Set the environment variable for HOME**
+ENV HOME=/home/theia
+
+# **Key Change 3: Create the .m2 directory and configure Maven**
+RUN mkdir -p /home/theia/.m2/repository && \
+    cat <<EOF > /home/theia/.m2/settings.xml
+<settings>
+  <localRepository>/home/theia/.m2/repository</localRepository>
+</settings>
+EOF
+
+# **Key Change 4: Set theia user as the owner of .m2**
+RUN chown -R theia:theia /home/theia/.m2
+
 ENV THEIA_MINI_BROWSER_HOST_PATTERN {{hostname}}
 ENV THEIA_WEBVIEW_ENDPOINT {{hostname}}
+
+# Copy project
+COPY --chown=theia:theia project /home/project
+COPY --chown=theia:theia settings.json /home/theia/.theia/settings.json
+
+# Build projects once (uses the correct local repository path)
+
+RUN mvn clean verify -f /home/project/java/pom.xml -Dmaven.repo.local=/home/theia/.m2/repository && \
+    cd /home/project/web && \
+    npm install && npm run build && \
+    cd /home/theia
+
 WORKDIR /home/theia
 COPY --from=build-stage --chown=theia:theia /home/theia /home/theia
 EXPOSE 3000
@@ -55,6 +83,7 @@ ENV SHELL=/bin/bash \
     THEIA_DEFAULT_PLUGINS=local-dir:/home/theia/plugins
 ENV USE_LOCAL_GIT true
 USER theia
+
 
 WORKDIR /home/theia
 ENTRYPOINT [ "node", "/home/theia/src-gen/backend/main.js" ]

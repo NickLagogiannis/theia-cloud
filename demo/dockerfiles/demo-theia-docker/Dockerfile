@@ -5,10 +5,11 @@ FROM ghcr.io/eclipse-theia/theia-ide/theia-ide:1.56.1
 ENV THEIA_MINI_BROWSER_HOST_PATTERN={{hostname}}
 ENV THEIA_WEBVIEW_ENDPOINT={{hostname}}
 
-# Set environment variables for Ant
-ENV ANT_VERSION=1.8.0
-ENV ANT_HOME=/home/tools/ant/ant-$ANT_VERSION
-ENV PATH=$ANT_HOME/bin:$PATH
+# Set environment variables
+ENV JAVA_HOME=/home/tools/java \
+    ANT_HOME=/home/tools/ant \
+    JBOSS_HOME=/home/tools/jboss \
+    PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$JBOSS_HOME/bin:$PATH
 
 # Disable interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -18,31 +19,49 @@ USER root
 
 # Update and install prerequisites
 RUN apt-get update && \
-    apt-get install -y wget openjdk-17-jdk && \
+    apt-get install -y wget unzip && \
     apt-get clean
 
-# Download and extract Apache Ant
+# Download and install OpenJDK 8 directly under /home/tools/java
+RUN mkdir -p /home/tools/java && \
+    wget https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u292-b10/OpenJDK8U-jdk_x64_linux_hotspot_8u292b10.tar.gz -O /tmp/openjdk-8.tar.gz && \
+    tar -xzf /tmp/openjdk-8.tar.gz --strip-components=1 -C /home/tools/java && \
+    rm /tmp/openjdk-8.tar.gz
+
+# Download and install Apache Ant directly under /home/tools/ant
 RUN mkdir -p /home/tools/ant && \
-    wget https://archive.apache.org/dist/ant/binaries/apache-ant-${ANT_VERSION}-bin.tar.gz && \
-    tar -xzf apache-ant-${ANT_VERSION}-bin.tar.gz -C /home/tools/ant && \
-    mv /home/tools/ant/apache-ant-${ANT_VERSION} $ANT_HOME && \
-    rm apache-ant-${ANT_VERSION}-bin.tar.gz
+    wget https://archive.apache.org/dist/ant/binaries/apache-ant-1.8.0-bin.tar.gz -O /tmp/ant.tar.gz && \
+    tar -xzf /tmp/ant.tar.gz --strip-components=1 -C /home/tools/ant && \
+    rm /tmp/ant.tar.gz
 
-# Ensure PATH is set for all users
-RUN echo "export ANT_HOME=$ANT_HOME" >> /etc/profile.d/ant.sh && \
-    echo "export PATH=$ANT_HOME/bin:\$PATH" >> /etc/profile.d/ant.sh && \
-    chmod +x /etc/profile.d/ant.sh
+# Download and install JBoss 5.1.0.GA directly under /home/tools/jboss
+RUN mkdir -p /home/tools/jboss && \
+    wget https://sourceforge.net/projects/jboss/files/JBoss/JBoss-5.1.0.GA/jboss-5.1.0.GA.zip/download -O /tmp/jboss.zip && \
+    unzip /tmp/jboss.zip -d /home/tools/jboss && \
+    mv /home/tools/jboss/jboss-5.1.0.GA/* /home/tools/jboss/ && \
+    rm -r /home/tools/jboss/jboss-5.1.0.GA /tmp/jboss.zip
 
-# # Verify Ant installation as root
-# RUN /bin/sh -c ". /etc/profile.d/ant.sh && ant -version"
+# Set environment variables globally
+RUN echo "export JAVA_HOME=/home/tools/java" >> /etc/profile.d/environment.sh && \
+    echo "export ANT_HOME=/home/tools/ant" >> /etc/profile.d/environment.sh && \
+    echo "export JBOSS_HOME=/home/tools/jboss" >> /etc/profile.d/environment.sh && \
+    echo "export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$JBOSS_HOME/bin:\$PATH" >> /etc/profile.d/environment.sh && \
+    chmod +x /etc/profile.d/environment.sh
 
-# Switch back to Theia user
+# Grant permissions to theia user
+RUN chown -R theia:theia /home/tools/java /home/tools/ant /home/tools/jboss && \
+    chmod -R u+rwx /home/tools/java /home/tools/ant /home/tools/jboss 
+
+# Switch to theia user
 USER theia
 
-#Copy ant project 
+# Verify installations
+RUN $JAVA_HOME/bin/java -version && \
+    $ANT_HOME/bin/ant -version && \
+    echo "JBOSS_HOME is set to: $JBOSS_HOME"
 
-COPY mywinecellar /home/project
-
+# Copy ant project
+# COPY --chown=theia:theia mywinecellar /home/project/mywinecellar
 
 
 

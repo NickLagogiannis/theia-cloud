@@ -1,0 +1,77 @@
+# Base image
+FROM ghcr.io/eclipse-theia/theia-ide/theia-ide:1.56.1
+
+# Theia configurations
+ENV THEIA_MINI_BROWSER_HOST_PATTERN={{hostname}}
+ENV THEIA_WEBVIEW_ENDPOINT={{hostname}}
+
+# Set environment variables
+ENV JAVA_HOME=/home/tools/java \
+    ANT_HOME=/home/tools/ant \
+    JBOSS_HOME=/home/tools/jboss \
+    PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$JBOSS_HOME/bin:$PATH
+
+# Disable interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Switch to root to install prerequisites
+USER root
+
+# Update and install prerequisites
+RUN apt-get update && \
+    apt-get install -y wget unzip && \
+    apt-get clean
+
+# Copy the pre-extracted JDK directly under /home/tools/java
+COPY jdk1.6.0_19 /home/tools/java
+
+# Move the contents of jdk1.6.0_19 to /home/tools/java and clean up
+RUN mv /home/tools/java/jdk1.6.0_19/* /home/tools/java/ && \
+    rm -rf /home/tools/java/jdk1.6.0_19
+
+# Download and install Apache Ant directly under /home/tools/ant
+RUN mkdir -p /home/tools/ant && \
+    wget https://archive.apache.org/dist/ant/binaries/apache-ant-1.8.0-bin.tar.gz -O /tmp/ant.tar.gz && \
+    tar -xzf /tmp/ant.tar.gz --strip-components=1 -C /home/tools/ant && \
+    rm /tmp/ant.tar.gz
+
+# Download and install JBoss 5.1.0.GA directly under /home/tools/jboss
+RUN mkdir -p /home/tools/jboss && \
+    wget https://sourceforge.net/projects/jboss/files/JBoss/JBoss-5.1.0.GA/jboss-5.1.0.GA.zip/download -O /tmp/jboss.zip && \
+    unzip /tmp/jboss.zip -d /home/tools/jboss && \
+    mv /home/tools/jboss/jboss-5.1.0.GA/* /home/tools/jboss/ && \
+    rm -r /home/tools/jboss/jboss-5.1.0.GA /tmp/jboss.zip
+
+# Set environment variables globally
+RUN echo "export JAVA_HOME=/home/tools/java" >> /etc/profile.d/environment.sh && \
+    echo "export ANT_HOME=/home/tools/ant" >> /etc/profile.d/environment.sh && \
+    echo "export JBOSS_HOME=/home/tools/jboss" >> /etc/profile.d/environment.sh && \
+    echo "export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$JBOSS_HOME/bin:\$PATH" >> /etc/profile.d/environment.sh && \
+    chmod +x /etc/profile.d/environment.sh
+
+# Grant permissions to theia user
+RUN chown -R theia:theia /home/tools/java /home/tools/ant /home/tools/jboss && \
+    chmod -R u+rwx /home/tools/java /home/tools/ant /home/tools/jboss
+
+# Switch to theia user
+USER theia
+
+# # Verify installations
+# RUN java -version && \
+#     ant -version && \
+#     echo "JBOSS_HOME is set to: $JBOSS_HOME"
+
+# Copy ant project
+COPY --chown=theia:theia mywinecellar /home/project/mywinecellar
+
+
+
+# Copy project
+# COPY --chown=theia:theia project /home/project
+# COPY --chown=theia:theia settings.json /home/theia/theia-blueprint/applications/browser/.theia/settings.json
+
+# # Build projects once
+# RUN mvn clean verify -f /home/project/java/pom.xml && \
+#     cd /home/project/web && \
+#     npm install && npm run build && \
+#     cd /home/theia

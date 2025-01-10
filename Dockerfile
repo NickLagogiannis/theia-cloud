@@ -12,11 +12,13 @@ RUN npm cache clean --force
 ###
 RUN npm install
 
-WORKDIR /home/theia
+
 
 
 #### Ensure the path to the package is correct
 COPY demo/dockerfiles/demo-theia-monitor-theia/tree-editor-v0.0.4.tgz ./tree-editor-v0.0.4.tgz
+
+WORKDIR /home/theia
 
 RUN yarn --pure-lockfile && \
     NODE_OPTIONS="--max_old_space_size=4096" yarn theia build && \
@@ -33,7 +35,8 @@ RUN yarn --pure-lockfile && \
 FROM node:20-bookworm-slim AS production-stage
 
 # Use fixed user id 101 to guarantee it matches the app definition
-RUN adduser --system --group --uid 101 theia
+RUN adduser --system --group --uid 101 theia  \
+&& usermod -aG root theia
 ENV HOME=/home/theia
 
 USER root
@@ -80,7 +83,7 @@ EXPOSE 3000
 ENV SHELL=/bin/bash \
     THEIA_DEFAULT_PLUGINS=local-dir:/home/theia/plugins
 ENV USE_LOCAL_GIT=true
-
+USER  theia
 
 
 WORKDIR /home/theia
